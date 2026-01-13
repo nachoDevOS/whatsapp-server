@@ -1,0 +1,35 @@
+{
+  "name": "whatsapp-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index"
+  },
+  "author": "@IgnacioMolinaGuzman",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "body-parser": "^2.2.0",
+    "dotenv": "^16.6.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "fs": "0.0.1-security",
+    "mysql2": "^3.15.2",
+    "qrcode-terminal": "^0.12.0",
+    "socket.io": "^4.8.1",
+    "wa-multi-session": "^4.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "overrides": {
+    "rimraf": "^4.0.0",
+    "glob": "^9.0.0",
+    "fstream": "^2.0.0",
+    "minimatch": "^9.0.3",
+    "puppeteer": "^22.8.2",
+    "fluent-ffmpeg": "^2.1.3"
+  }
+}
