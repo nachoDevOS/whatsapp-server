@@ -14,8 +14,18 @@ require('dotenv').config();
 // ==================== FUNCIONES ANTI-BAN ====================
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Función Spintax: Elige variaciones de palabras al azar. Ej: {Hola|Buenas}
+const spintax = (text) => {
+    const regex = /\{([^{}]+)\}/g;
+    return text.replace(regex, (match, content) => {
+        const choices = content.split('|');
+        return choices[Math.floor(Math.random() * choices.length)];
+    });
+};
+
 const randomizeText = (text) => {
     if (!text) return text;
+    
     // Genera una firma única invisible usando una combinación de caracteres de control
     const invisibleChars = [
         '\u200B', '\u200C', '\u200D', '\u2060', 
@@ -29,7 +39,11 @@ const randomizeText = (text) => {
     for (let i = 0; i < Math.floor(Math.random() * 3) + 1; i++) prefix += randomChar();
     for (let i = 0; i < Math.floor(Math.random() * 3) + 1; i++) suffix += randomChar();
     
-    const result = prefix + text + suffix;
+    // 1. Primero procesamos el Spintax (variación visual) y aseguramos que sea texto
+    const processedText = spintax(String(text));
+
+    // 2. Luego agregamos la capa invisible (variación de código)
+    const result = prefix + processedText + suffix;
 
     // Generamos una vista de depuración para ver los caracteres invisibles
     const debugView = result.split('').map(char => {
@@ -381,11 +395,14 @@ app.post('/send', authenticateToken, async(req, res) => {
                 return res.status(400).json({error: 1, message: 'El parámetro "phone" es requerido'});
             }
 
+            // Limpieza de seguridad: Asegurar que es string y quitar espacios accidentales del frontend
+            const cleanText = String(text || '').trim();
+
             // 1. Pausa aleatoria para simular comportamiento humano (entre 1s y 3s) antes de procesar
             await sleep(Math.floor(Math.random() * 2000) + 1000);
 
             // 2. Randomizar el texto para evitar firmas MD5 idénticas (anti-spam)
-            const safeText = randomizeText(text);
+            const safeText = randomizeText(cleanText);
 
             const logEntry = { phone, text, imageUrl, audioUrl, videoUrl, date: new Date().toJSON() };
 
