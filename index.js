@@ -11,6 +11,38 @@ const db = require('./database');
 
 require('dotenv').config();
 
+// ==================== FUNCIONES ANTI-BAN ====================
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const randomizeText = (text) => {
+    if (!text) return text;
+    // Genera una firma única invisible usando una combinación de caracteres de control
+    const invisibleChars = [
+        '\u200B', '\u200C', '\u200D', '\u2060', 
+        '\u2061', '\u2062', '\u2063', '\u2064', '\u206E', '\u206F'
+    ];
+    const randomChar = () => invisibleChars[Math.floor(Math.random() * invisibleChars.length)];
+
+    let prefix = '';
+    let suffix = '';
+    // Agrega caracteres invisibles al inicio y final para que el hash del mensaje sea único
+    for (let i = 0; i < Math.floor(Math.random() * 3) + 1; i++) prefix += randomChar();
+    for (let i = 0; i < Math.floor(Math.random() * 3) + 1; i++) suffix += randomChar();
+    
+    const result = prefix + text + suffix;
+
+    // Generamos una vista de depuración para ver los caracteres invisibles
+    const debugView = result.split('').map(char => {
+        const code = char.charCodeAt(0);
+        // Si es un caracter estándar (letras, números), lo mostramos. Si es especial, mostramos su código Unicode.
+        return (code >= 32 && code <= 126) ? char : `[\\u${code.toString(16).toUpperCase().padStart(4, '0')}]`;
+    }).join('');
+
+    console.log(`[Anti-Ban] Enviando (Estructura Real): ${debugView}`);
+    
+    return result;
+};
+
 const config = {
     port: process.env.APP_PORT || 3000,
     env: process.env.APP_ENV || 'dev',
@@ -221,11 +253,12 @@ setInterval(async () => {
     try {
         const timedOutUsers = await db.checkAgentTimeouts();
         for (const user of timedOutUsers) {
+            await sleep(Math.floor(Math.random() * 1000) + 500); // Pausa aleatoria entre usuarios
             const message = 'Parece que nuestros asesores están ocupados. Has sido devuelto al menú principal. Envía "hola" para comenzar de nuevo.';
             await whatsapp.sendTextMessage({
                 sessionId: 'default', // O la sessionId que corresponda
                 to: user.phone_number,
-                text: message
+                text: randomizeText(message)
             });
             console.log(`Usuario ${user.phone_number} ha vuelto al menú principal por inactividad del agente.`);
         }
@@ -316,10 +349,13 @@ app.get('/test', async (req, res) => {
                 });
             }
 
+            // Pausa natural si no hay typing explícito
+            if (!typing) await sleep(Math.floor(Math.random() * 1000) + 500);
+
             await whatsapp.sendTextMessage({
                 sessionId: id,
                 to: phone,
-                text,
+                text: randomizeText(text),
             });
 
             console.log('Mensaje de prueba enviado');
@@ -345,6 +381,12 @@ app.post('/send', authenticateToken, async(req, res) => {
                 return res.status(400).json({error: 1, message: 'El parámetro "phone" es requerido'});
             }
 
+            // 1. Pausa aleatoria para simular comportamiento humano (entre 1s y 3s) antes de procesar
+            await sleep(Math.floor(Math.random() * 2000) + 1000);
+
+            // 2. Randomizar el texto para evitar firmas MD5 idénticas (anti-spam)
+            const safeText = randomizeText(text);
+
             const logEntry = { phone, text, imageUrl, audioUrl, videoUrl, date: new Date().toJSON() };
 
             let sentMessageInfo;
@@ -353,14 +395,14 @@ app.post('/send', authenticateToken, async(req, res) => {
                 await whatsapp.sendTextMessage({
                     sessionId: id,
                     to: phone,
-                    text
+                    text: safeText
                 });
                 sentMessageInfo = { phone, text };
             }else if(imageUrl){
                 await whatsapp.sendImage({
                     sessionId: id,
                     to: phone,
-                    text,
+                    text: safeText,
                     media: imageUrl
                 });
                 sentMessageInfo = { phone, text, imageUrl };
@@ -375,7 +417,7 @@ app.post('/send', authenticateToken, async(req, res) => {
                 await whatsapp.sendVideo({
                     sessionId: id,
                     to: phone,
-                    text,
+                    text: safeText,
                     media: videoUrl
                 });
                 sentMessageInfo = { phone, text, videoUrl };
