@@ -8,6 +8,7 @@ const axios = require('axios');
 const authenticateToken = require('./middleware/auth');
 const rateLimit = require('express-rate-limit');
 const db = require('./database');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 
 require('dotenv').config();
 
@@ -90,6 +91,14 @@ const limiter = rateLimit({
 
 app.use(limiter);
 app.use(bodyParser.json());
+
+// Configurar carpeta para guardar archivos multimedia
+const mediaDir = path.join(__dirname, 'media');
+if (!fs.existsSync(mediaDir)) {
+    fs.mkdirSync(mediaDir);
+}
+app.use('/media', express.static(mediaDir));
+
 whatsapp.loadSessionsFromStorage();
 
 whatsapp.onDisconnected((sessionId) => {
@@ -109,6 +118,39 @@ whatsapp.onDisconnected((sessionId) => {
 // Set para rastrear mensajes enviados por el bot y evitar duplicados
 const sentBotMessages = new Set();
 
+// Función para descargar y guardar archivos multimedia
+const downloadAndSaveMedia = async (msg) => {
+    try {
+        // Descargar el buffer del mensaje usando la librería
+        const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: console });
+        
+        if (!buffer) return null;
+        
+        const messageType = Object.keys(msg.message || {})[0];
+        let extension = 'bin';
+        
+        // Determinar extensión según el tipo de mensaje
+        if (messageType === 'imageMessage') extension = 'jpg';
+        else if (messageType === 'videoMessage') extension = 'mp4';
+        else if (messageType === 'audioMessage') extension = 'ogg'; // WhatsApp suele usar OGG/Opus
+        else if (messageType === 'stickerMessage') extension = 'webp';
+        else if (messageType === 'documentMessage') {
+            const mimetype = msg.message.documentMessage.mimetype || '';
+            extension = mimetype.split('/')[1]?.split(';')[0] || 'bin';
+        }
+        
+        const fileName = `${msg.key.id}.${extension}`;
+        const filePath = path.join(mediaDir, fileName);
+        
+        fs.writeFileSync(filePath, buffer);
+        
+        return `/media/${fileName}`;
+    } catch (error) {
+        console.error('Error al descargar/guardar media:', error.message);
+        return null;
+    }
+};
+
 // ==================== INICIO - LÓGICA DE CHATBOT CON BASE DE DATOS v2 ====================
 whatsapp.onMessageReceived(async (msg) => {
     try {
@@ -123,6 +165,12 @@ whatsapp.onMessageReceived(async (msg) => {
         const timestamp = typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp : (msg.messageTimestamp?.low || Date.now() / 1000);
         const messageContent = msg.message?.[messageType] || {};
         const quotedMessageId = messageContent.contextInfo?.stanzaId || null;
+
+        // Descargar media si existe (Imágenes, Videos, Audios, Documentos)
+        let mediaUrl = null;
+        if (['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'].includes(messageType)) {
+            mediaUrl = await downloadAndSaveMedia(msg);
+        }
 
         // --- MEJORA: Manejar mensajes que no son de texto para guardarlos en la DB ---
         // Si no hay texto, pero es un mensaje multimedia, asignamos un placeholder para el frontend.
@@ -155,7 +203,7 @@ whatsapp.onMessageReceived(async (msg) => {
                     }
                 }
 
-                await db.saveGroupMessage(group.id, sender, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId, source === 'user' ? 'received' : 'sent', null);
+                await db.saveGroupMessage(group.id, sender, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId, source === 'user' ? 'received' : 'sent', mediaUrl);
                 console.log(
                     `\n========== MENSAJE DE GRUPO GUARDADO (DB) ==========\n` +
                     `Grupo: ${group.group_jid}\n` +
@@ -189,7 +237,7 @@ whatsapp.onMessageReceived(async (msg) => {
             if (msg.key.fromMe) {
                 // Es un mensaje del agente (manual)
                 if (wamId && !sentBotMessages.has(msg.key.id)) {
-                    await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent', null);
+                    await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent', mediaUrl);
                     console.log(
                         `\n========== MENSAJE DE AGENTE (A USUARIO)GUARDADO (DB) ==========\n` +
                         `A: ${user.phone_number}\n` +
@@ -200,7 +248,7 @@ whatsapp.onMessageReceived(async (msg) => {
             } else {
                 // Es un mensaje del usuario para el agente
                 if (wamId) {
-                    await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received', null);
+                    await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received', mediaUrl);
                     console.log(
                         `\n========== MENSAJE DE USUARIO (A AGENTE) GUARDADO (DB) ==========\n` +
                         `De: ${user.phone_number}\n` +
@@ -229,7 +277,7 @@ whatsapp.onMessageReceived(async (msg) => {
                 sentBotMessages.delete(msg.key.id);
             } else {
                 // Es un mensaje manual, pero el usuario no estaba en modo agente
-                await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent', null);
+                await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent', mediaUrl);
                 console.log(
                     `\n========== MENSAJE MANUAL GUARDADO (DB) ==========\n` +
                     `A: ${user.phone_number}\n` +
@@ -247,7 +295,7 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         // Guardar mensaje del usuario
-        await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received', null);
+        await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received', mediaUrl);
 
         console.log(
             `\n========== MENSAJE RECIBIDO (DB) ==========\n` +
