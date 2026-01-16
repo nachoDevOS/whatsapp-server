@@ -118,6 +118,9 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+        const messageType = Object.keys(msg.message || {})[0] || 'unknown';
+        const wamId = msg.key.id;
+        const timestamp = typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp : (msg.messageTimestamp?.low || Date.now() / 1000);
 
         // ==================== LÓGICA PARA GRUPOS ====================
         if (msg.key.remoteJid.endsWith('@g.us')) {
@@ -126,6 +129,7 @@ whatsapp.onMessageReceived(async (msg) => {
             if (messageText) {
                 let source = 'user';
                 let sender = msg.key.participant || msg.participant;
+                let senderPushName = msg.pushName;
 
                 if (msg.key.fromMe) {
                     sender = 'me'; // O el ID del bot si estuviera disponible
@@ -137,7 +141,7 @@ whatsapp.onMessageReceived(async (msg) => {
                     }
                 }
 
-                await db.saveGroupMessage(group.id, sender, messageText, source);
+                await db.saveGroupMessage(group.id, sender, messageText, source, wamId, messageType, timestamp, senderPushName);
                 console.log(
                     `\n========== MENSAJE DE GRUPO GUARDADO (DB) ==========\n` +
                     `Grupo: ${group.group_jid}\n` +
@@ -160,7 +164,7 @@ whatsapp.onMessageReceived(async (msg) => {
             }
         }
 
-        const user = await db.findOrCreateUser(contactId, msg.sessionId);
+        const user = await db.findOrCreateUser(contactId, msg.sessionId, msg.pushName);
 
         // --- INICIO DE LA NUEVA LÓGICA DE ENRUTAMIENTO ---
 
@@ -171,7 +175,7 @@ whatsapp.onMessageReceived(async (msg) => {
             if (msg.key.fromMe) {
                 // Es un mensaje del agente (manual)
                 if (messageText && !sentBotMessages.has(msg.key.id)) {
-                    await db.saveMessage(user.id, messageText, 'manual');
+                    await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp);
                     console.log(
                         `\n========== MENSAJE DE AGENTE (A USUARIO)GUARDADO (DB) ==========\n` +
                         `A: ${user.phone_number}\n` +
@@ -182,7 +186,7 @@ whatsapp.onMessageReceived(async (msg) => {
             } else {
                 // Es un mensaje del usuario para el agente
                 if (messageText) {
-                    await db.saveMessage(user.id, messageText, 'user');
+                    await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp);
                     console.log(
                         `\n========== MENSAJE DE USUARIO (A AGENTE) GUARDADO (DB) ==========\n` +
                         `De: ${user.phone_number}\n` +
@@ -201,7 +205,7 @@ whatsapp.onMessageReceived(async (msg) => {
 
             if (sentBotMessages.has(msg.key.id)) {
                 // Es un eco de una respuesta del bot
-                await db.saveMessage(user.id, messageText, 'bot');
+                await db.saveMessage(user.id, messageText, 'bot', wamId, messageType, timestamp);
                 console.log(
                     `\n========== RESPUESTA DE BOT GUARDADA (DB) ==========\n` +
                     `A: ${user.phone_number}\n` +
@@ -211,7 +215,7 @@ whatsapp.onMessageReceived(async (msg) => {
                 sentBotMessages.delete(msg.key.id);
             } else {
                 // Es un mensaje manual, pero el usuario no estaba en modo agente
-                await db.saveMessage(user.id, messageText, 'manual');
+                await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp);
                 console.log(
                     `\n========== MENSAJE MANUAL GUARDADO (DB) ==========\n` +
                     `A: ${user.phone_number}\n` +
@@ -229,7 +233,7 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         // Guardar mensaje del usuario
-        await db.saveMessage(user.id, messageText, 'user');
+        await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp);
 
         console.log(
             `\n========== MENSAJE RECIBIDO (DB) ==========\n` +

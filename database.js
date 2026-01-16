@@ -30,6 +30,7 @@ const initDb = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         contact_id VARCHAR(255) NOT NULL,
         phone_number VARCHAR(255) NOT NULL,
+        push_name VARCHAR(255),
         session_id VARCHAR(255) NOT NULL,
         state VARCHAR(255) DEFAULT 'initial',
         last_interaction_at TIMESTAMP NULL,
@@ -44,7 +45,10 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS messages (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT,
+        wam_id VARCHAR(255) UNIQUE,
+        message_type VARCHAR(50) DEFAULT 'text',
         message_text TEXT,
+        timestamp BIGINT,
         source ENUM('user', 'bot', 'manual') NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -56,6 +60,7 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS groups (
         id INT AUTO_INCREMENT PRIMARY KEY,
         group_jid VARCHAR(255) NOT NULL,
+        subject VARCHAR(255),
         session_id VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
@@ -68,7 +73,11 @@ const initDb = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         group_id INT,
         sender_jid VARCHAR(255),
+        sender_push_name VARCHAR(255),
+        wam_id VARCHAR(255) UNIQUE,
+        message_type VARCHAR(50) DEFAULT 'text',
         message_text TEXT,
+        timestamp BIGINT,
         source ENUM('user', 'bot', 'manual') NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (group_id) REFERENCES groups(id)
@@ -83,7 +92,7 @@ const initDb = async () => {
   }
 };
 
-const findOrCreateUser = async (contactId, sessionId) => {
+const findOrCreateUser = async (contactId, sessionId, pushName = null) => {
   await pool.query('INSERT IGNORE INTO sessions (session_id) VALUES (?)', [sessionId]);
 
   let phoneNumber = contactId.split('@')[0];
@@ -97,10 +106,15 @@ const findOrCreateUser = async (contactId, sessionId) => {
       await pool.query('UPDATE users SET phone_number = ? WHERE id = ?', [phoneNumber, user.id]);
       user.phone_number = phoneNumber;
     }
+    // Actualizar push_name si ha cambiado o es nuevo
+    if (pushName && user.push_name !== pushName) {
+      await pool.query('UPDATE users SET push_name = ? WHERE id = ?', [pushName, user.id]);
+      user.push_name = pushName;
+    }
     return user;
   }
 
-  const [result] = await pool.query('INSERT INTO users (contact_id, phone_number, session_id) VALUES (?, ?, ?)', [contactId, phoneNumber, sessionId]);
+  const [result] = await pool.query('INSERT INTO users (contact_id, phone_number, session_id, push_name) VALUES (?, ?, ?, ?)', [contactId, phoneNumber, sessionId, pushName]);
   const [newUser] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
   return newUser[0];
 };
@@ -115,10 +129,10 @@ const findOrCreateGroup = async (groupJid, sessionId) => {
   return newGroup[0];
 };
 
-const saveGroupMessage = async (groupId, senderJid, messageText, source) => {
+const saveGroupMessage = async (groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName) => {
   await pool.query(
-    'INSERT INTO group_messages (group_id, sender_jid, message_text, source) VALUES (?, ?, ?, ?)',
-    [groupId, senderJid, messageText, source]
+    'INSERT INTO group_messages (group_id, sender_jid, message_text, source, wam_id, message_type, timestamp, sender_push_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName]
   );
 };
 
@@ -145,10 +159,10 @@ const checkAgentTimeouts = async () => {
 
 
 // Se ha cambiado el parámetro sentByBot por source
-const saveMessage = async (userId, messageText, source) => {
+const saveMessage = async (userId, messageText, source, wamId = null, messageType = 'text', timestamp = null) => {
   await pool.query(
-    'INSERT INTO messages (user_id, message_text, source) VALUES (?, ?, ?)',
-    [userId, messageText, source]
+    'INSERT INTO messages (user_id, message_text, source, wam_id, message_type, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+    [userId, messageText, source, wamId, messageType, timestamp]
   );
 };
 
