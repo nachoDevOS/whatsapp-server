@@ -161,6 +161,18 @@ npm rebuild
         <td>{phone: "59175199157", text: "Hello", image_url: "https://my_image_url"}</td>
         <td>OBJECT</td>
     </tr>
+    <tr>
+        <td>GET</td>
+        <td>/history/:contact_id</td>
+        <td>Query: limit (optional, default 50)</td>
+        <td>OBJECT (Chat History)</td>
+    </tr>
+    <tr>
+        <td>GET</td>
+        <td>/history/group/:groupJid</td>
+        <td>Query: limit (optional, default 50)</td>
+        <td>OBJECT (Group History)</td>
+    </tr>
 </table>
 
 ## Credits

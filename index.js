@@ -635,6 +635,41 @@ app.post('/send', authenticateToken, async(req, res) => {
     }        
 });
 
+// Endpoint para obtener historial de chat de un usuario
+app.get('/history/:phone', authenticateToken, async (req, res) => {
+    try {
+        let phone = req.params.phone;
+        // Normalizar el número si no viene con el sufijo
+        if (!phone.includes('@')) {
+            phone = `${phone}@s.whatsapp.net`;
+        }
+
+        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+        const history = await db.getChatHistory(phone, limit);
+        
+        res.json({ success: 1, count: history.length, data: history });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Endpoint para obtener historial de un grupo
+app.get('/history/group/:groupJid', authenticateToken, async (req, res) => {
+    try {
+        let groupJid = req.params.groupJid;
+        if (!groupJid.includes('@')) {
+            groupJid = `${groupJid}@g.us`;
+        }
+
+        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+        const history = await db.getGroupHistory(groupJid, limit);
+        
+        res.json({ success: 1, count: history.length, data: history });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Middleware para manejo de errores centralizado
 app.use((err, req, res, next) => {
     console.error(err);

@@ -172,6 +172,29 @@ const saveMessage = async (userId, messageText, source, wamId = null, messageTyp
   );
 };
 
+const getChatHistory = async (contactId, limit = 50) => {
+  const [rows] = await pool.query(`
+    SELECT m.id, m.wam_id, m.message_text, m.media_url, m.timestamp, m.source, m.status, m.message_type, m.quoted_message_id
+    FROM messages m
+    JOIN users u ON m.user_id = u.id
+    WHERE u.contact_id = ?
+    ORDER BY m.timestamp ASC
+    LIMIT ?
+  `, [contactId, limit]);
+  return rows;
+};
+
+const getGroupHistory = async (groupJid, limit = 50) => {
+  const [rows] = await pool.query(`
+    SELECT gm.id, gm.wam_id, gm.sender_jid, gm.sender_push_name, gm.message_text, gm.media_url, gm.timestamp, gm.source, gm.status, gm.message_type
+    FROM group_messages gm
+    JOIN groups g ON gm.group_id = g.id
+    WHERE g.group_jid = ?
+    ORDER BY gm.timestamp ASC
+    LIMIT ?
+  `, [groupJid, limit]);
+  return rows;
+};
 
 module.exports = {
   initDb,
@@ -180,6 +203,8 @@ module.exports = {
   updateUserState,
   saveMessage,
   saveGroupMessage,
+  getChatHistory,
+  getGroupHistory,
   pool,
   updateUserInteractionTime,
   checkAgentTimeouts,
