@@ -50,6 +50,8 @@ const initDb = async () => {
         message_text TEXT,
         timestamp BIGINT,
         source ENUM('user', 'bot', 'manual') NOT NULL,
+        status VARCHAR(50) DEFAULT 'received',
+        quoted_message_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
@@ -79,6 +81,8 @@ const initDb = async () => {
         message_text TEXT,
         timestamp BIGINT,
         source ENUM('user', 'bot', 'manual') NOT NULL,
+        status VARCHAR(50) DEFAULT 'received',
+        quoted_message_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (group_id) REFERENCES groups(id)
       )
@@ -129,10 +133,10 @@ const findOrCreateGroup = async (groupJid, sessionId) => {
   return newGroup[0];
 };
 
-const saveGroupMessage = async (groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName) => {
+const saveGroupMessage = async (groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId = null, status = 'received') => {
   await pool.query(
-    'INSERT INTO group_messages (group_id, sender_jid, message_text, source, wam_id, message_type, timestamp, sender_push_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName]
+    'INSERT INTO group_messages (group_id, sender_jid, message_text, source, wam_id, message_type, timestamp, sender_push_name, quoted_message_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId, status]
   );
 };
 
@@ -159,10 +163,10 @@ const checkAgentTimeouts = async () => {
 
 
 // Se ha cambiado el parámetro sentByBot por source
-const saveMessage = async (userId, messageText, source, wamId = null, messageType = 'text', timestamp = null) => {
+const saveMessage = async (userId, messageText, source, wamId = null, messageType = 'text', timestamp = null, quotedMessageId = null, status = 'received') => {
   await pool.query(
-    'INSERT INTO messages (user_id, message_text, source, wam_id, message_type, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
-    [userId, messageText, source, wamId, messageType, timestamp]
+    'INSERT INTO messages (user_id, message_text, source, wam_id, message_type, timestamp, quoted_message_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [userId, messageText, source, wamId, messageType, timestamp, quotedMessageId, status]
   );
 };
 

@@ -300,33 +300,33 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         // Enviar respuesta y guardarla
-        // if (responseText) {
-        //     const textToSend = randomizeText(responseText);
-        //     const sentMessage = await whatsapp.sendTextMessage({
-        //         sessionId: msg.sessionId,
-        //         to: msg.key.remoteJid,
-        //         text: textToSend
-        //     });
+        if (responseText) {
+            const textToSend = randomizeText(responseText);
+            const sentMessage = await whatsapp.sendTextMessage({
+                sessionId: msg.sessionId,
+                to: msg.key.remoteJid,
+                text: textToSend
+            });
 
-        //     // Añadir el ID del mensaje del bot al set para que el handler `fromMe` lo reconozca
-        //     if (sentMessage && sentMessage.key && sentMessage.key.id) {
-        //         sentBotMessages.add(sentMessage.key.id);
+            // Añadir el ID del mensaje del bot al set para que el handler `fromMe` lo reconozca
+            if (sentMessage && sentMessage.key && sentMessage.key.id) {
+                sentBotMessages.add(sentMessage.key.id);
                 
-        //         // GUARDAR INMEDIATAMENTE para asegurar que se guarda el texto con el código anti-ban
-        //         const sentTimestamp = Math.floor(Date.now() / 1000);
-        //         await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp);
+                // GUARDAR INMEDIATAMENTE para asegurar que se guarda el texto con el código anti-ban
+                const sentTimestamp = Math.floor(Date.now() / 1000);
+                await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp);
 
-        //         // Limpiar el set después de un tiempo para que no crezca indefinidamente
-        //         setTimeout(() => sentBotMessages.delete(sentMessage.key.id), 60000); // 1 minuto
-        //     }
+                // Limpiar el set después de un tiempo para que no crezca indefinidamente
+                setTimeout(() => sentBotMessages.delete(sentMessage.key.id), 60000); // 1 minuto
+            }
 
-        //     console.log(
-        //         `\n========== ENVIANDO RESPUESTA (GUARDADA CON ANTI-BAN) ==========\n` +
-        //         `A: ${user.phone_number}\n` +
-        //         `Mensaje Real: ${textToSend}\n` + 
-        //         `================================================================\n`
-        //     );
-        // }
+            console.log(
+                `\n========== ENVIANDO RESPUESTA (GUARDADA CON ANTI-BAN) ==========\n` +
+                `A: ${user.phone_number}\n` +
+                `Mensaje Real: ${textToSend}\n` + 
+                `================================================================\n`
+            );
+        }
     } catch (error) {
         console.error('Error en onMessageReceived:', error);
     }
@@ -476,6 +476,20 @@ app.post('/send', authenticateToken, async(req, res) => {
                 return res.status(400).json({error: 1, message: 'El parámetro "phone" es requerido'});
             }
 
+            // Preparar usuario/grupo para guardar en DB
+            let contactId = phone;
+            if (!contactId.includes('@')) {
+                contactId = `${contactId}@s.whatsapp.net`;
+            }
+            const isGroup = contactId.endsWith('@g.us');
+            let user, group;
+
+            if (isGroup) {
+                group = await db.findOrCreateGroup(contactId, id);
+            } else {
+                user = await db.findOrCreateUser(contactId, id);
+            }
+
             // Limpieza de seguridad: Asegurar que es string y quitar espacios accidentales del frontend
             const cleanText = String(text || '').trim();
 
@@ -488,16 +502,17 @@ app.post('/send', authenticateToken, async(req, res) => {
             const logEntry = { phone, text, imageUrl, audioUrl, videoUrl, date: new Date().toJSON() };
 
             let sentMessageInfo;
+            let sentMessage;
 
             if(!imageUrl && !audioUrl && !videoUrl){
-                await whatsapp.sendTextMessage({
+                sentMessage = await whatsapp.sendTextMessage({
                     sessionId: id,
                     to: phone,
                     text: safeText
                 });
                 sentMessageInfo = { phone, text };
             }else if(imageUrl){
-                await whatsapp.sendImage({
+                sentMessage = await whatsapp.sendImage({
                     sessionId: id,
                     to: phone,
                     text: safeText,
@@ -505,20 +520,36 @@ app.post('/send', authenticateToken, async(req, res) => {
                 });
                 sentMessageInfo = { phone, text, imageUrl };
             }else if(audioUrl){
-                await whatsapp.sendVoiceNote({
+                sentMessage = await whatsapp.sendVoiceNote({
                     sessionId: id,
                     to: phone,
                     media: audioUrl
                 });
                 sentMessageInfo = { phone, audioUrl };
             }else if(videoUrl){
-                await whatsapp.sendVideo({
+                sentMessage = await whatsapp.sendVideo({
                     sessionId: id,
                     to: phone,
                     text: safeText,
                     media: videoUrl
                 });
                 sentMessageInfo = { phone, text, videoUrl };
+            }
+
+            // Guardar en DB inmediatamente para asegurar que se guarda el texto con Anti-Ban
+            if (sentMessage && sentMessage.key && sentMessage.key.id) {
+                sentBotMessages.add(sentMessage.key.id);
+                const sentTimestamp = Math.floor(Date.now() / 1000);
+                const messageType = imageUrl ? 'imageMessage' : (audioUrl ? 'audioMessage' : (videoUrl ? 'videoMessage' : 'conversation'));
+                
+                if (isGroup && group) {
+                    await db.saveGroupMessage(group.id, 'me', safeText, 'manual', sentMessage.key.id, messageType, sentTimestamp, null);
+                } else if (user) {
+                    await db.saveMessage(user.id, safeText, 'manual', sentMessage.key.id, messageType, sentTimestamp);
+                }
+                
+                // Limpiar el set después de un tiempo
+                setTimeout(() => sentBotMessages.delete(sentMessage.key.id), 60000);
             }
 
             registerLog('messages.log', JSON.stringify(logEntry) + ',\n');
