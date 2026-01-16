@@ -48,6 +48,7 @@ const initDb = async () => {
         wam_id VARCHAR(255) UNIQUE,
         message_type VARCHAR(50) DEFAULT 'text',
         message_text TEXT,
+        media_url TEXT,
         timestamp BIGINT,
         source ENUM('user', 'bot', 'manual') NOT NULL,
         status VARCHAR(50) DEFAULT 'received',
@@ -79,6 +80,7 @@ const initDb = async () => {
         wam_id VARCHAR(255) UNIQUE,
         message_type VARCHAR(50) DEFAULT 'text',
         message_text TEXT,
+        media_url TEXT,
         timestamp BIGINT,
         source ENUM('user', 'bot', 'manual') NOT NULL,
         status VARCHAR(50) DEFAULT 'received',
@@ -133,10 +135,10 @@ const findOrCreateGroup = async (groupJid, sessionId) => {
   return newGroup[0];
 };
 
-const saveGroupMessage = async (groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId = null, status = 'received') => {
+const saveGroupMessage = async (groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId = null, status = 'received', mediaUrl = null) => {
   await pool.query(
-    'INSERT INTO group_messages (group_id, sender_jid, message_text, source, wam_id, message_type, timestamp, sender_push_name, quoted_message_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId, status]
+    'INSERT INTO group_messages (group_id, sender_jid, message_text, source, wam_id, message_type, timestamp, sender_push_name, quoted_message_id, status, media_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [groupId, senderJid, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId, status, mediaUrl]
   );
 };
 
@@ -163,10 +165,10 @@ const checkAgentTimeouts = async () => {
 
 
 // Se ha cambiado el parámetro sentByBot por source
-const saveMessage = async (userId, messageText, source, wamId = null, messageType = 'text', timestamp = null, quotedMessageId = null, status = 'received') => {
+const saveMessage = async (userId, messageText, source, wamId = null, messageType = 'text', timestamp = null, quotedMessageId = null, status = 'received', mediaUrl = null) => {
   await pool.query(
-    'INSERT INTO messages (user_id, message_text, source, wam_id, message_type, timestamp, quoted_message_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [userId, messageText, source, wamId, messageType, timestamp, quotedMessageId, status]
+    'INSERT INTO messages (user_id, message_text, source, wam_id, message_type, timestamp, quoted_message_id, status, media_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [userId, messageText, source, wamId, messageType, timestamp, quotedMessageId, status, mediaUrl]
   );
 };
 

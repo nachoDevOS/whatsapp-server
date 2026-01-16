@@ -155,7 +155,7 @@ whatsapp.onMessageReceived(async (msg) => {
                     }
                 }
 
-                await db.saveGroupMessage(group.id, sender, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId, source === 'user' ? 'received' : 'sent');
+                await db.saveGroupMessage(group.id, sender, messageText, source, wamId, messageType, timestamp, senderPushName, quotedMessageId, source === 'user' ? 'received' : 'sent', null);
                 console.log(
                     `\n========== MENSAJE DE GRUPO GUARDADO (DB) ==========\n` +
                     `Grupo: ${group.group_jid}\n` +
@@ -189,7 +189,7 @@ whatsapp.onMessageReceived(async (msg) => {
             if (msg.key.fromMe) {
                 // Es un mensaje del agente (manual)
                 if (wamId && !sentBotMessages.has(msg.key.id)) {
-                    await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent');
+                    await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent', null);
                     console.log(
                         `\n========== MENSAJE DE AGENTE (A USUARIO)GUARDADO (DB) ==========\n` +
                         `A: ${user.phone_number}\n` +
@@ -200,7 +200,7 @@ whatsapp.onMessageReceived(async (msg) => {
             } else {
                 // Es un mensaje del usuario para el agente
                 if (wamId) {
-                    await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received');
+                    await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received', null);
                     console.log(
                         `\n========== MENSAJE DE USUARIO (A AGENTE) GUARDADO (DB) ==========\n` +
                         `De: ${user.phone_number}\n` +
@@ -229,7 +229,7 @@ whatsapp.onMessageReceived(async (msg) => {
                 sentBotMessages.delete(msg.key.id);
             } else {
                 // Es un mensaje manual, pero el usuario no estaba en modo agente
-                await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent');
+                await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp, quotedMessageId, 'sent', null);
                 console.log(
                     `\n========== MENSAJE MANUAL GUARDADO (DB) ==========\n` +
                     `A: ${user.phone_number}\n` +
@@ -247,7 +247,7 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         // Guardar mensaje del usuario
-        await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received');
+        await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp, quotedMessageId, 'received', null);
 
         console.log(
             `\n========== MENSAJE RECIBIDO (DB) ==========\n` +
@@ -301,7 +301,7 @@ whatsapp.onMessageReceived(async (msg) => {
             await db.updateUserState(user.id, 'initial');
         }
 
-        // // Enviar respuesta y guardarla
+        // Enviar respuesta y guardarla
         // if (responseText) {
         //     const textToSend = randomizeText(responseText);
         //     const sentMessage = await whatsapp.sendTextMessage({
@@ -316,7 +316,7 @@ whatsapp.onMessageReceived(async (msg) => {
                 
         //         // GUARDAR INMEDIATAMENTE para asegurar que se guarda el texto con el código anti-ban
         //         const sentTimestamp = Math.floor(Date.now() / 1000);
-        //         await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp, null, 'sent');
+        //         await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp, null, 'sent', null);
 
         //         // Limpiar el set después de un tiempo para que no crezca indefinidamente
         //         setTimeout(() => sentBotMessages.delete(sentMessage.key.id), 60000); // 1 minuto
@@ -352,7 +352,7 @@ setInterval(async () => {
             if (sentMessage && sentMessage.key && sentMessage.key.id) {
                 sentBotMessages.add(sentMessage.key.id);
                 const sentTimestamp = Math.floor(Date.now() / 1000);
-                await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp, null, 'sent');
+                await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp, null, 'sent', null);
                 setTimeout(() => sentBotMessages.delete(sentMessage.key.id), 60000);
             }
             
@@ -543,11 +543,12 @@ app.post('/send', authenticateToken, async(req, res) => {
                 sentBotMessages.add(sentMessage.key.id);
                 const sentTimestamp = Math.floor(Date.now() / 1000);
                 const messageType = imageUrl ? 'imageMessage' : (audioUrl ? 'audioMessage' : (videoUrl ? 'videoMessage' : 'conversation'));
+                const mediaUrl = imageUrl || audioUrl || videoUrl || null;
                 
                 if (isGroup && group) {
-                    await db.saveGroupMessage(group.id, 'me', safeText, 'manual', sentMessage.key.id, messageType, sentTimestamp, null, null, 'sent');
+                    await db.saveGroupMessage(group.id, 'me', safeText, 'manual', sentMessage.key.id, messageType, sentTimestamp, null, null, 'sent', mediaUrl);
                 } else if (user) {
-                    await db.saveMessage(user.id, safeText, 'manual', sentMessage.key.id, messageType, sentTimestamp, null, 'sent');
+                    await db.saveMessage(user.id, safeText, 'manual', sentMessage.key.id, messageType, sentTimestamp, null, 'sent', mediaUrl);
                 }
                 
                 // Limpiar el set después de un tiempo
