@@ -271,7 +271,7 @@ setInterval(async () => {
             const message = 'Parece que nuestros asesores están ocupados. Has sido devuelto al menú principal. Envía "hola" para comenzar de nuevo.';
             await whatsapp.sendTextMessage({
                 sessionId: user.session_id,
-                to: user.phone_number,
+                to: user.contact_id,
                 text: randomizeText(message)
             });
             console.log(`Usuario ${user.phone_number} ha vuelto al menú principal por inactividad del agente.`);

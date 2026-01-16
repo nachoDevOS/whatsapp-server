@@ -28,13 +28,14 @@ const initDb = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        contact_id VARCHAR(255) NOT NULL,
         phone_number VARCHAR(255) NOT NULL,
         session_id VARCHAR(255) NOT NULL,
         state VARCHAR(255) DEFAULT 'initial',
         last_interaction_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
-        UNIQUE KEY unique_user_session (phone_number, session_id)
+        UNIQUE KEY unique_user_session (contact_id, session_id)
       )
     `);
 
@@ -58,14 +59,16 @@ const initDb = async () => {
   }
 };
 
-const findOrCreateUser = async (phoneNumber, sessionId) => {
+const findOrCreateUser = async (contactId, sessionId) => {
   await pool.query('INSERT IGNORE INTO sessions (session_id) VALUES (?)', [sessionId]);
 
-  const [rows] = await pool.query('SELECT * FROM users WHERE phone_number = ? AND session_id = ?', [phoneNumber, sessionId]);
+  const [rows] = await pool.query('SELECT * FROM users WHERE contact_id = ? AND session_id = ?', [contactId, sessionId]);
   if (rows.length > 0) {
     return rows[0];
   }
-  const [result] = await pool.query('INSERT INTO users (phone_number, session_id) VALUES (?, ?)', [phoneNumber, sessionId]);
+
+  const phoneNumber = contactId.split('@')[0];
+  const [result] = await pool.query('INSERT INTO users (contact_id, phone_number, session_id) VALUES (?, ?, ?)', [contactId, phoneNumber, sessionId]);
   const [newUser] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
   return newUser[0];
 };
