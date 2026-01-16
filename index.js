@@ -114,8 +114,12 @@ whatsapp.onMessageReceived(async (msg) => {
     try {
         // Corrección de ID: Si existe 'participant' (común en grupos o para resolver LIDs), usarlo como ID real.
         let contactId = msg.key.remoteJid;
-        if (!msg.key.fromMe && msg.key.participant) {
-            contactId = msg.key.participant;
+        if (!msg.key.fromMe) {
+            if (msg.key.participant) {
+                contactId = msg.key.participant;
+            } else if (msg.participant) {
+                contactId = msg.participant;
+            }
         }
 
         const user = await db.findOrCreateUser(contactId, msg.sessionId);
