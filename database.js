@@ -18,12 +18,23 @@ const initDb = async () => {
     console.log('Conectado a la base de datos MySQL.');
 
     await connection.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        phone_number VARCHAR(255) NOT NULL UNIQUE,
+        phone_number VARCHAR(255) NOT NULL,
+        session_id VARCHAR(255) NOT NULL,
         state VARCHAR(255) DEFAULT 'initial',
         last_interaction_at TIMESTAMP NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_session (phone_number, session_id)
       )
     `);
 
@@ -47,12 +58,14 @@ const initDb = async () => {
   }
 };
 
-const findOrCreateUser = async (phoneNumber) => {
-  const [rows] = await pool.query('SELECT * FROM users WHERE phone_number = ?', [phoneNumber]);
+const findOrCreateUser = async (phoneNumber, sessionId) => {
+  await pool.query('INSERT IGNORE INTO sessions (session_id) VALUES (?)', [sessionId]);
+
+  const [rows] = await pool.query('SELECT * FROM users WHERE phone_number = ? AND session_id = ?', [phoneNumber, sessionId]);
   if (rows.length > 0) {
     return rows[0];
   }
-  const [result] = await pool.query('INSERT INTO users (phone_number) VALUES (?)', [phoneNumber]);
+  const [result] = await pool.query('INSERT INTO users (phone_number, session_id) VALUES (?, ?)', [phoneNumber, sessionId]);
   const [newUser] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
   return newUser[0];
 };

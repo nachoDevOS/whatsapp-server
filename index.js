@@ -112,7 +112,7 @@ const sentBotMessages = new Set();
 // ==================== INICIO - LÓGICA DE CHATBOT CON BASE DE DATOS v2 ====================
 whatsapp.onMessageReceived(async (msg) => {
     try {
-        const user = await db.findOrCreateUser(msg.key.remoteJid);
+        const user = await db.findOrCreateUser(msg.key.remoteJid, msg.sessionId);
         const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
 
         // --- INICIO DE LA NUEVA LÓGICA DE ENRUTAMIENTO ---
@@ -270,7 +270,7 @@ setInterval(async () => {
             await sleep(Math.floor(Math.random() * 1000) + 500); // Pausa aleatoria entre usuarios
             const message = 'Parece que nuestros asesores están ocupados. Has sido devuelto al menú principal. Envía "hola" para comenzar de nuevo.';
             await whatsapp.sendTextMessage({
-                sessionId: 'default', // O la sessionId que corresponda
+                sessionId: user.session_id,
                 to: user.phone_number,
                 text: randomizeText(message)
             });
