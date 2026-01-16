@@ -117,16 +117,28 @@ whatsapp.onMessageReceived(async (msg) => {
             return;
         }
 
-        const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+        let messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
         const messageType = Object.keys(msg.message || {})[0] || 'unknown';
         const wamId = msg.key.id;
         const timestamp = typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp : (msg.messageTimestamp?.low || Date.now() / 1000);
 
+        // --- MEJORA: Manejar mensajes que no son de texto para guardarlos en la DB ---
+        // Si no hay texto, pero es un mensaje multimedia, asignamos un placeholder para el frontend.
+        if (!messageText && messageType !== 'protocolMessage' && messageType !== 'senderKeyDistributionMessage') {
+            if (messageType === 'imageMessage') messageText = msg.message.imageMessage.caption || '[Imagen]';
+            else if (messageType === 'videoMessage') messageText = msg.message.videoMessage.caption || '[Video]';
+            else if (messageType === 'audioMessage') messageText = '[Audio]';
+            else if (messageType === 'documentMessage') messageText = msg.message.documentMessage.fileName || '[Documento]';
+            else if (messageType === 'stickerMessage') messageText = '[Sticker]';
+            else if (messageType === 'contactMessage') messageText = '[Contacto]';
+            else if (messageType === 'locationMessage') messageText = '[Ubicación]';
+            else messageText = `[Mensaje tipo: ${messageType}]`; // Para futuros tipos de mensaje
+        }
+
         // ==================== LÓGICA PARA GRUPOS ====================
         if (msg.key.remoteJid.endsWith('@g.us')) {
             const group = await db.findOrCreateGroup(msg.key.remoteJid, msg.sessionId);
-            
-            if (messageText) {
+            if (wamId) { // Guardar cualquier tipo de mensaje, no solo texto
                 let source = 'user';
                 let sender = msg.key.participant || msg.participant;
                 let senderPushName = msg.pushName;
@@ -174,7 +186,7 @@ whatsapp.onMessageReceived(async (msg) => {
 
             if (msg.key.fromMe) {
                 // Es un mensaje del agente (manual)
-                if (messageText && !sentBotMessages.has(msg.key.id)) {
+                if (wamId && !sentBotMessages.has(msg.key.id)) {
                     await db.saveMessage(user.id, messageText, 'manual', wamId, messageType, timestamp);
                     console.log(
                         `\n========== MENSAJE DE AGENTE (A USUARIO)GUARDADO (DB) ==========\n` +
@@ -185,7 +197,7 @@ whatsapp.onMessageReceived(async (msg) => {
                 }
             } else {
                 // Es un mensaje del usuario para el agente
-                if (messageText) {
+                if (wamId) {
                     await db.saveMessage(user.id, messageText, 'user', wamId, messageType, timestamp);
                     console.log(
                         `\n========== MENSAJE DE USUARIO (A AGENTE) GUARDADO (DB) ==========\n` +
@@ -201,7 +213,7 @@ whatsapp.onMessageReceived(async (msg) => {
 
         // 2. El mensaje es nuestro (fromMe), pero el usuario NO está hablando con un agente (Usuario con Bot o el agente le responde al usuario de manera manual directamente)
         if (msg.key.fromMe) {
-            if (!messageText) return;
+            if (!wamId) return; // Si no hay ID de mensaje, no hay nada que guardar
 
             if (sentBotMessages.has(msg.key.id)) {
                 // Es un eco de una respuesta del bot
@@ -228,8 +240,8 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         // 3. El mensaje es de un usuario y para el bot (no está en modo agente)
-        if (!messageText) {
-            return; // Ignorar si no hay texto
+        if (!wamId) {
+            return; // Ignorar si no hay un ID de mensaje válido
         }
 
         // Guardar mensaje del usuario
@@ -242,7 +254,12 @@ whatsapp.onMessageReceived(async (msg) => {
             `=========================================\n`
         );
 
-        const lowerCaseMessage = messageText.toLowerCase().trim();
+        // Si el mensaje no tiene texto procesable para el bot (ej. es solo una imagen), no continuar.
+        const lowerCaseMessage = (messageText || '').toLowerCase().trim();
+        if (!lowerCaseMessage || lowerCaseMessage.startsWith('[')) {
+            return;
+        }
+
         let responseText = '';
 
         // Lógica de estado
