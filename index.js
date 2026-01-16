@@ -112,6 +112,11 @@ const sentBotMessages = new Set();
 // ==================== INICIO - LÓGICA DE CHATBOT CON BASE DE DATOS v2 ====================
 whatsapp.onMessageReceived(async (msg) => {
     try {
+        // 1. FILTRO INICIAL: Ignorar mensajes de Grupos y Estados (Broadcast) para no ensuciar la DB con IDs extraños
+        if (msg.key.remoteJid === 'status@broadcast' || msg.key.remoteJid.endsWith('@g.us')) {
+            return;
+        }
+
         // Corrección de ID: Si existe 'participant' (común en grupos o para resolver LIDs), usarlo como ID real.
         let contactId = msg.key.remoteJid;
         if (!msg.key.fromMe) {
@@ -187,10 +192,6 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         // 3. El mensaje es de un usuario y para el bot (no está en modo agente)
-        if (msg.key.remoteJid.endsWith('@g.us')) {
-            return; // Ignorar mensajes de grupos
-        }
-
         if (!messageText) {
             return; // Ignorar si no hay texto
         }
