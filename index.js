@@ -159,8 +159,45 @@ const downloadAndSaveMedia = async (msg) => {
         }
         
         const fileName = `${msg.key.id}.${extension}`;
-        const filePath = path.join(mediaDir, fileName);
         
+        // --- OPCIÓN: Subir a API de Almacenamiento Externa ---
+        // Si configuras UPLOAD_API_URL en tu .env, el archivo se subirá allí en lugar de guardarse en el disco.
+        if (process.env.UPLOAD_API_URL) {
+            try {
+                const form = new FormData();
+                const blob = new Blob([buffer]);
+                
+                // Nombre del campo (Cloudinary usa 'file', ImgBB usa 'image', por defecto 'file')
+                const fieldName = process.env.UPLOAD_FIELD_NAME || 'file';
+                form.append(fieldName, blob, fileName);
+
+                // Soporte para Cloudinary (requiere upload_preset)
+                if (process.env.UPLOAD_PRESET) {
+                    form.append('upload_preset', process.env.UPLOAD_PRESET);
+                }
+                
+                // Soporte para APIs que piden key/token en el cuerpo (ej. ImgBB usa 'key' en query params, pero otros en body)
+                if (process.env.UPLOAD_API_TOKEN) {
+                    form.append('token', process.env.UPLOAD_API_TOKEN);
+                }
+
+                const response = await axios.post(process.env.UPLOAD_API_URL, form);
+                
+                // Intentamos detectar la URL en la respuesta (ajusta esto según la respuesta de tu API)
+                const externalUrl = response.data.url || response.data.secure_url || response.data.data?.url || response.data.link;
+                
+                if (externalUrl) {
+                    console.log(`[Media] Archivo subido a la nube: ${externalUrl}`);
+                    return externalUrl;
+                }
+            } catch (uploadError) {
+                console.error('[Media] Falló la subida externa, guardando localmente:', uploadError.message);
+                if (uploadError.response) console.error('Detalles:', uploadError.response.data);
+            }
+        }
+
+        // --- FALLBACK: Guardado Local ---
+        const filePath = path.join(mediaDir, fileName);
         fs.writeFileSync(filePath, buffer);
         
         return `/media/${fileName}`;

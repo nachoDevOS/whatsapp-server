@@ -18,6 +18,11 @@ APP_NAME="WhatsApp API"
 APP_ENV="dev" # prod for production environment
 APP_DOMAIN=example.com # your domain without http or https (example.com)
 APP_PORT=3002 # your port
+
+# Storage Configuration (Opcional - Ejemplo para Cloudinary)
+UPLOAD_API_URL="https://api.cloudinary.com/v1_1/<TU_CLOUD_NAME>/auto/upload"
+UPLOAD_PRESET="<TU_UPLOAD_PRESET>" # Crear en Settings -> Upload -> Upload presets (Mode: Unsigned)
+UPLOAD_FIELD_NAME="file"
 ```
 
 ## Start dev
