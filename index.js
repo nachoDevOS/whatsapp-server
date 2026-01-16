@@ -112,7 +112,13 @@ const sentBotMessages = new Set();
 // ==================== INICIO - LÓGICA DE CHATBOT CON BASE DE DATOS v2 ====================
 whatsapp.onMessageReceived(async (msg) => {
     try {
-        const user = await db.findOrCreateUser(msg.key.remoteJid, msg.sessionId);
+        // Corrección de ID: Si existe 'participant' (común en grupos o para resolver LIDs), usarlo como ID real.
+        let contactId = msg.key.remoteJid;
+        if (!msg.key.fromMe && msg.key.participant) {
+            contactId = msg.key.participant;
+        }
+
+        const user = await db.findOrCreateUser(contactId, msg.sessionId);
         const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
 
         // --- INICIO DE LA NUEVA LÓGICA DE ENRUTAMIENTO ---

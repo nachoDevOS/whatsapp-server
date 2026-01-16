@@ -62,12 +62,20 @@ const initDb = async () => {
 const findOrCreateUser = async (contactId, sessionId) => {
   await pool.query('INSERT IGNORE INTO sessions (session_id) VALUES (?)', [sessionId]);
 
+  let phoneNumber = contactId.split('@')[0];
+  phoneNumber = phoneNumber.split(':')[0]; // Asegura que solo quede el número (quita :1 si existe)
+
   const [rows] = await pool.query('SELECT * FROM users WHERE contact_id = ? AND session_id = ?', [contactId, sessionId]);
   if (rows.length > 0) {
-    return rows[0];
+    const user = rows[0];
+    // Si el usuario ya existe pero tiene el ID guardado en phone_number (corrección de datos antiguos)
+    if (user.phone_number.includes('@')) {
+      await pool.query('UPDATE users SET phone_number = ? WHERE id = ?', [phoneNumber, user.id]);
+      user.phone_number = phoneNumber;
+    }
+    return user;
   }
 
-  const phoneNumber = contactId.split('@')[0];
   const [result] = await pool.query('INSERT INTO users (contact_id, phone_number, session_id) VALUES (?, ?, ?)', [contactId, phoneNumber, sessionId]);
   const [newUser] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
   return newUser[0];
