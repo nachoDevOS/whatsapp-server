@@ -216,13 +216,13 @@ whatsapp.onMessageReceived(async (msg) => {
             if (!wamId) return; // Si no hay ID de mensaje, no hay nada que guardar
 
             if (sentBotMessages.has(msg.key.id)) {
-                // Es un eco de una respuesta del bot
-                await db.saveMessage(user.id, messageText, 'bot', wamId, messageType, timestamp);
+                // Es un eco de una respuesta del bot QUE YA FUE GUARDADA
+                // No guardamos de nuevo para evitar duplicados, pero confirmamos el evento.
                 console.log(
-                    `\n========== RESPUESTA DE BOT GUARDADA (DB) ==========\n` +
+                    `\n========== RESPUESTA DE BOT CONFIRMADA (YA GUARDADA) ==========\n` +
                     `A: ${user.phone_number}\n` +
-                    `Mensaje: ${messageText}\n` +
-                    `==============================================\n`
+                    `ID: ${msg.key.id}\n` +
+                    `=============================================================\n`
                 );
                 sentBotMessages.delete(msg.key.id);
             } else {
@@ -299,26 +299,32 @@ whatsapp.onMessageReceived(async (msg) => {
             await db.updateUserState(user.id, 'initial');
         }
 
-        // // Enviar respuesta y guardarla
+        // Enviar respuesta y guardarla
         // if (responseText) {
+        //     const textToSend = randomizeText(responseText);
         //     const sentMessage = await whatsapp.sendTextMessage({
         //         sessionId: msg.sessionId,
         //         to: msg.key.remoteJid,
-        //         text: responseText
+        //         text: textToSend
         //     });
 
         //     // Añadir el ID del mensaje del bot al set para que el handler `fromMe` lo reconozca
         //     if (sentMessage && sentMessage.key && sentMessage.key.id) {
         //         sentBotMessages.add(sentMessage.key.id);
+                
+        //         // GUARDAR INMEDIATAMENTE para asegurar que se guarda el texto con el código anti-ban
+        //         const sentTimestamp = Math.floor(Date.now() / 1000);
+        //         await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp);
+
         //         // Limpiar el set después de un tiempo para que no crezca indefinidamente
         //         setTimeout(() => sentBotMessages.delete(sentMessage.key.id), 60000); // 1 minuto
         //     }
 
         //     console.log(
-        //         `\n========== ENVIANDO RESPUESTA (NO GUARDADA AÚN) ==========\n` +
+        //         `\n========== ENVIANDO RESPUESTA (GUARDADA CON ANTI-BAN) ==========\n` +
         //         `A: ${user.phone_number}\n` +
-        //         `Mensaje: ${responseText}\n` +
-        //         `==========================================================\n`
+        //         `Mensaje Real: ${textToSend}\n` + 
+        //         `================================================================\n`
         //     );
         // }
     } catch (error) {
@@ -333,11 +339,21 @@ setInterval(async () => {
         for (const user of timedOutUsers) {
             await sleep(Math.floor(Math.random() * 1000) + 500); // Pausa aleatoria entre usuarios
             const message = 'Parece que nuestros asesores están ocupados. Has sido devuelto al menú principal. Envía "hola" para comenzar de nuevo.';
-            await whatsapp.sendTextMessage({
+            const textToSend = randomizeText(message);
+            
+            const sentMessage = await whatsapp.sendTextMessage({
                 sessionId: user.session_id,
                 to: user.contact_id,
-                text: randomizeText(message)
+                text: textToSend
             });
+            
+            if (sentMessage && sentMessage.key && sentMessage.key.id) {
+                sentBotMessages.add(sentMessage.key.id);
+                const sentTimestamp = Math.floor(Date.now() / 1000);
+                await db.saveMessage(user.id, textToSend, 'bot', sentMessage.key.id, 'conversation', sentTimestamp);
+                setTimeout(() => sentBotMessages.delete(sentMessage.key.id), 60000);
+            }
+            
             console.log(`Usuario ${user.phone_number} ha vuelto al menú principal por inactividad del agente.`);
         }
     } catch (error) {
