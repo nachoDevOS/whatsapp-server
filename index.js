@@ -127,16 +127,22 @@ const downloadAndSaveMedia = async (msg) => {
         if (!buffer) return null;
         
         const messageType = Object.keys(msg.message || {})[0];
+        const messageContent = msg.message[messageType];
         let extension = 'bin';
         
-        // Determinar extensión según el tipo de mensaje
-        if (messageType === 'imageMessage') extension = 'jpg';
+        // 1. Intentar obtener la extensión del nombre de archivo original (común en documentos)
+        if (messageContent && messageContent.fileName) {
+            extension = path.extname(messageContent.fileName).slice(1) || 'bin';
+        }
+        // 2. Si no, usar valores por defecto para tipos conocidos
+        else if (messageType === 'imageMessage') extension = 'jpg';
         else if (messageType === 'videoMessage') extension = 'mp4';
         else if (messageType === 'audioMessage') extension = 'ogg'; // WhatsApp suele usar OGG/Opus
         else if (messageType === 'stickerMessage') extension = 'webp';
-        else if (messageType === 'documentMessage') {
-            const mimetype = msg.message.documentMessage.mimetype || '';
-            extension = mimetype.split('/')[1]?.split(';')[0] || 'bin';
+        // 3. Fallback: intentar deducir del mimetype
+        else if (messageContent && messageContent.mimetype) {
+            const mime = messageContent.mimetype.split(';')[0];
+            extension = mime.split('/')[1] || 'bin';
         }
         
         const fileName = `${msg.key.id}.${extension}`;
