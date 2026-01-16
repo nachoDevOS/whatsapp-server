@@ -121,13 +121,26 @@ const sentBotMessages = new Set();
 // Función para descargar y guardar archivos multimedia
 const downloadAndSaveMedia = async (msg) => {
     try {
+        const messageType = Object.keys(msg.message || {})[0];
+        const messageContent = msg.message[messageType];
+
+        // 1. Validar tamaño del archivo antes de descargar (Límite: 5MB)
+        // Esto evita que el servidor colapse por falta de RAM con archivos grandes
+        if (messageContent && messageContent.fileLength) {
+            const fileSize = Number(messageContent.fileLength);
+            const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
+            if (fileSize > MAX_SIZE) {
+                console.log(`[Media] Archivo omitido: ${(fileSize / (1024 * 1024)).toFixed(2)}MB excede el límite de 5MB.`);
+                return null;
+            }
+        }
+
         // Descargar el buffer del mensaje usando la librería
         const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: console });
         
         if (!buffer) return null;
         
-        const messageType = Object.keys(msg.message || {})[0];
-        const messageContent = msg.message[messageType];
         let extension = 'bin';
         
         // 1. Intentar obtener la extensión del nombre de archivo original (común en documentos)
