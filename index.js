@@ -320,6 +320,7 @@ app.get('/status', async (req, res) => {
     }
 });
 
+// Para iniciar sesion en los QR
 app.get('/login', async (req, res) => {
     let id = req.query.id ? req.query.id : 'default';
     if (!whatsapp.getSession(id)) {
