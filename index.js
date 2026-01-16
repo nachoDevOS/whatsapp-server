@@ -117,6 +117,39 @@ whatsapp.onMessageReceived(async (msg) => {
             return;
         }
 
+        const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+
+        // ==================== LÓGICA PARA GRUPOS ====================
+        if (msg.key.remoteJid.endsWith('@g.us')) {
+            const group = await db.findOrCreateGroup(msg.key.remoteJid, msg.sessionId);
+            
+            if (messageText) {
+                let source = 'user';
+                let sender = msg.key.participant || msg.participant;
+
+                if (msg.key.fromMe) {
+                    sender = 'me'; // O el ID del bot si estuviera disponible
+                    if (sentBotMessages.has(msg.key.id)) {
+                        source = 'bot';
+                        sentBotMessages.delete(msg.key.id);
+                    } else {
+                        source = 'manual';
+                    }
+                }
+
+                await db.saveGroupMessage(group.id, sender, messageText, source);
+                console.log(
+                    `\n========== MENSAJE DE GRUPO GUARDADO (DB) ==========\n` +
+                    `Grupo: ${group.group_jid}\n` +
+                    `De: ${sender}\n` +
+                    `Mensaje: ${messageText}\n` +
+                    `====================================================\n`
+                );
+            }
+            return; // DETENER AQUÍ: No ejecutar lógica de chatbot individual para grupos
+        }
+
+        // ==================== LÓGICA PARA CONTACTOS INDIVIDUALES ====================
         // Corrección de ID: Si existe 'participant' (común en grupos o para resolver LIDs), usarlo como ID real.
         let contactId = msg.key.remoteJid;
         if (!msg.key.fromMe) {
@@ -128,7 +161,6 @@ whatsapp.onMessageReceived(async (msg) => {
         }
 
         const user = await db.findOrCreateUser(contactId, msg.sessionId);
-        const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
 
         // --- INICIO DE LA NUEVA LÓGICA DE ENRUTAMIENTO ---
 

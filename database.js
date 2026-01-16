@@ -51,8 +51,32 @@ const initDb = async () => {
       )
     `);
 
+    // --- NUEVAS TABLAS PARA GRUPOS ---
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        group_jid VARCHAR(255) NOT NULL,
+        session_id VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+        UNIQUE KEY unique_group_session (group_jid, session_id)
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS group_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        group_id INT,
+        sender_jid VARCHAR(255),
+        message_text TEXT,
+        source ENUM('user', 'bot', 'manual') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (group_id) REFERENCES groups(id)
+      )
+    `);
+
     connection.release();
-    console.log('Tablas "users" y "messages" (esquema actualizado) verificadas/creadas correctamente.');
+    console.log('Tablas de base de datos (users, messages, groups, group_messages) verificadas/creadas correctamente.');
   } catch (error) {
     console.error('No se pudo inicializar la base de datos:', error);
     process.exit(1); // Salir si no se puede conectar a la DB
@@ -79,6 +103,23 @@ const findOrCreateUser = async (contactId, sessionId) => {
   const [result] = await pool.query('INSERT INTO users (contact_id, phone_number, session_id) VALUES (?, ?, ?)', [contactId, phoneNumber, sessionId]);
   const [newUser] = await pool.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
   return newUser[0];
+};
+
+const findOrCreateGroup = async (groupJid, sessionId) => {
+  await pool.query('INSERT IGNORE INTO sessions (session_id) VALUES (?)', [sessionId]);
+  const [rows] = await pool.query('SELECT * FROM groups WHERE group_jid = ? AND session_id = ?', [groupJid, sessionId]);
+  if (rows.length > 0) return rows[0];
+  
+  const [result] = await pool.query('INSERT INTO groups (group_jid, session_id) VALUES (?, ?)', [groupJid, sessionId]);
+  const [newGroup] = await pool.query('SELECT * FROM groups WHERE id = ?', [result.insertId]);
+  return newGroup[0];
+};
+
+const saveGroupMessage = async (groupId, senderJid, messageText, source) => {
+  await pool.query(
+    'INSERT INTO group_messages (group_id, sender_jid, message_text, source) VALUES (?, ?, ?, ?)',
+    [groupId, senderJid, messageText, source]
+  );
 };
 
 const updateUserState = async (userId, state) => {
@@ -115,8 +156,10 @@ const saveMessage = async (userId, messageText, source) => {
 module.exports = {
   initDb,
   findOrCreateUser,
+  findOrCreateGroup,
   updateUserState,
   saveMessage,
+  saveGroupMessage,
   pool,
   updateUserInteractionTime,
   checkAgentTimeouts,
